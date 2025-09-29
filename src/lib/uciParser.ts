@@ -75,8 +75,6 @@ export class UCIParser {
     const depth = parseInt(depthMatch[1], 10);
     let updated = false;
 
-    console.log('[UCIParser] Processing:', message.substring(0, 80) + '...');
-
     // Handle depth transitions - only clear when going DEEPER
     if (depth > this.currentDepth) {
       // Store previous depth analysis before clearing

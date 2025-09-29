@@ -41,12 +41,6 @@
 
   // Handle analysis updates from EvaluationBar
   function handleAnalysis(event: CustomEvent<AnalysisSnapshot>): void {
-    console.log('[Analysis Page] Received analysis:', {
-      depth: event.detail.depth,
-      movesCount: event.detail.moves.size,
-      moves: Array.from(event.detail.moves.keys()),
-      isComplete: event.detail.isComplete
-    });
     currentAnalysis = event.detail;
     analysisInProgress = !event.detail.isComplete;
 

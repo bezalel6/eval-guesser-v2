@@ -19,12 +19,6 @@
 
   // Set up real-time analysis callback
   uciParser.setAnalysisCallback((snapshot) => {
-    console.log('[EvaluationBar] Analysis snapshot:', {
-      depth: snapshot.depth,
-      movesCount: snapshot.moves.size,
-      moves: Array.from(snapshot.moves.keys()),
-      isComplete: snapshot.isComplete
-    });
     dispatch('analysis', snapshot);
   });
 
@@ -64,12 +58,18 @@
       if (message.startsWith('info ')) {
         uciParser.parseInfo(message);
 
-        // Also parse for evaluation bar display
-        const evalResult = uciParser.parseEvaluation(message);
-        if (evalResult) {
-          score = evalResult.score;
-          displayScore = evalResult.displayScore;
-          isMate = evalResult.isMate;
+        // Only update evaluation bar for the BEST move (multipv 1)
+        // This ensures the bar shows the same evaluation as the top move in the list
+        const multipvMatch = message.match(/multipv (\d+)/);
+        const multipv = multipvMatch ? parseInt(multipvMatch[1], 10) : 1;
+
+        if (multipv === 1) {
+          const evalResult = uciParser.parseEvaluation(message);
+          if (evalResult) {
+            score = evalResult.score;
+            displayScore = evalResult.displayScore;
+            isMate = evalResult.isMate;
+          }
         }
       }
 
