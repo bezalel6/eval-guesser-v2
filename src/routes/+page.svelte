@@ -1,13 +1,70 @@
+<script>
+  import { Chess } from 'svelte-chess';
+  import EvaluationBar from '$lib/EvaluationBar.svelte';
+
+  let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+</script>
+
 <div class="w-full">
     <div class="max-w-6xl mx-auto px-6 py-12">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">Eval Guesser</h1>
 
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-            <p class="text-gray-600 dark:text-gray-400">Ready to start.</p>
-            <p class="text-xs text-gray-500 dark:text-gray-500 mt-4">
-                Current theme: <span class="text-gray-700 dark:text-gray-300 font-mono">Check the toggle in header</span>
-            </p>
+        <div class="chess-container">
+            <EvaluationBar fen={currentFen} depth={15} />
+            <div class="board-wrapper">
+                <Chess bind:fen={currentFen} />
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+  .chess-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    max-width: 800px;
+    margin: 0 auto;
+    gap: 1.5rem;
+    height: 600px; /* Fixed height for the container */
+  }
+
+  .board-wrapper {
+    width: 600px;
+    height: 600px;
+    position: relative;
+  }
+
+  /* Global styles for the chessboard */
+  :global(.chessground) {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  :global(.cg-wrap) {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    position: relative !important;
+  }
+
+  :global(.cg-board) {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Ensure coordinates are visible */
+  :global(.cg-wrap coords) {
+    font-size: 14px !important;
+    font-weight: bold !important;
+  }
+
+  :global(.cg-wrap coords.ranks) {
+    left: 4px !important;
+  }
+
+  :global(.cg-wrap coords.files) {
+    bottom: 4px !important;
+  }
+</style>
 

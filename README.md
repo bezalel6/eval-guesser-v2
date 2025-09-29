@@ -1,38 +1,6 @@
-# sv
+# Eval Guesser
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Inspired by geo-guesser, This app will test how close you can get to evaluating chess positions' in centipawns.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Evaluations are always in [centipawns](https://www.chessprogramming.org/Centipawns), from the standpoint of the white player. regardless of player to move. 
+By always normalizing (multiplying by -1 evaluations for positions with black to move) evaluations, we can track and easily graph the flow of a game
