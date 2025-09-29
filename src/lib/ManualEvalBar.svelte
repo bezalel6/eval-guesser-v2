@@ -16,6 +16,20 @@
   let barElement: HTMLDivElement;
   let showControls: boolean = true;
 
+  // Performance optimization: local drag state
+  let dragState: {
+    currentGuess: number;
+    isMateGuess: boolean;
+    isWhiteMate: boolean;
+    displayValue: string;
+    whiteFill: number;
+    blackFill: number;
+  } | null = null;
+
+  // RAF throttling
+  let rafId: number | null = null;
+  let pendingUpdate: (() => void) | null = null;
+
   const dispatch = createEventDispatcher();
 
   // Update display value when guess changes
@@ -31,17 +45,23 @@
     }
   }
 
-  // Calculate bar fill based on current guess
-  $: whiteFill = ((): number => {
-    if (isMateGuess) {
-      return isWhiteMate ? 100 : 0;
+  // Calculate bar fill based on current guess (or drag state)
+  $: whiteFill = calculateWhiteFill(
+    dragState?.currentGuess ?? currentGuess,
+    dragState?.isMateGuess ?? isMateGuess,
+    dragState?.isWhiteMate ?? isWhiteMate
+  );
+  $: blackFill = 100 - whiteFill;
+
+  function calculateWhiteFill(guess: number, isMate: boolean, isWhite: boolean): number {
+    if (isMate) {
+      return isWhite ? 100 : 0;
     }
     // Map evaluation to percentage (clamp between -20 and +20 pawns)
-    const clampedScore = Math.max(-20, Math.min(20, currentGuess));
+    const clampedScore = Math.max(-20, Math.min(20, guess));
     // Map -20 to 5%, 0 to 50%, +20 to 95%
     return 50 + (clampedScore * 2.25);
-  })();
-  $: blackFill = 100 - whiteFill;
+  }
 
   // Convert Y position to evaluation
   function positionToEvaluation(y: number, barHeight: number): { value: number, isMate: boolean, displayStr: string } {
@@ -62,47 +82,136 @@
     }
   }
 
+  // Throttled update using RAF
+  function scheduleUpdate(updateFn: () => void): void {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+    }
+
+    pendingUpdate = updateFn;
+    rafId = requestAnimationFrame(() => {
+      if (pendingUpdate) {
+        pendingUpdate();
+        pendingUpdate = null;
+      }
+      rafId = null;
+    });
+  }
+
+  // Apply evaluation from position (optimized for drag performance)
+  function applyEvaluation(y: number, rect: DOMRect, updateReactive: boolean = true): void {
+    const result = positionToEvaluation(y, rect.height);
+
+    if (isDragging && !updateReactive) {
+      // During drag: update local state only, no reactive updates
+      if (result.isMate) {
+        dragState = {
+          currentGuess: 0,
+          isMateGuess: true,
+          isWhiteMate: result.value > 0,
+          displayValue: result.value > 0 ? 'M1' : '-M1',
+          whiteFill: result.value > 0 ? 100 : 0,
+          blackFill: result.value > 0 ? 0 : 100
+        };
+      } else {
+        const whiteFillCalc = calculateWhiteFill(result.value, false, true);
+        dragState = {
+          currentGuess: result.value,
+          isMateGuess: false,
+          isWhiteMate: true,
+          displayValue: result.displayStr,
+          whiteFill: whiteFillCalc,
+          blackFill: 100 - whiteFillCalc
+        };
+      }
+    } else if (updateReactive) {
+      // Not dragging or explicit reactive update: update reactive state
+      if (result.isMate) {
+        isMateGuess = true;
+        isWhiteMate = result.value > 0;
+        mateIn = 1; // Default to mate in 1
+      } else {
+        isMateGuess = false;
+        currentGuess = result.value;
+      }
+      dragState = null; // Clear drag state
+    }
+  }
+
   // Handle click on bar
   function handleBarClick(event: MouseEvent): void {
     const rect = barElement.getBoundingClientRect();
     const y = event.clientY - rect.top;
-    const result = positionToEvaluation(y, rect.height);
-
-    if (result.isMate) {
-      isMateGuess = true;
-      isWhiteMate = result.value > 0;
-      mateIn = 1; // Default to mate in 1
-    } else {
-      isMateGuess = false;
-      currentGuess = result.value;
-    }
+    applyEvaluation(y, rect, true);
   }
 
   // Handle mouse down for dragging
   function handleMouseDown(event: MouseEvent): void {
     event.preventDefault();
     isDragging = true;
-    handleBarClick(event);
+
+    // Initialize drag state with current values
+    dragState = {
+      currentGuess,
+      isMateGuess,
+      isWhiteMate,
+      displayValue,
+      whiteFill,
+      blackFill
+    };
+
+    const rect = barElement.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    applyEvaluation(y, rect, false);
   }
 
-  // Handle mouse move for dragging and hover
+  // Handle mouse move for dragging and hover (optimized)
   function handleMouseMove(event: MouseEvent): void {
     const rect = barElement.getBoundingClientRect();
     const y = event.clientY - rect.top;
 
-    // Update hover position and value
-    hoverY = Math.max(0, Math.min(rect.height, y));
-    const result = positionToEvaluation(y, rect.height);
-    hoverValue = result.displayStr;
-
     if (isDragging) {
-      handleBarClick(event);
+      // During drag: throttled updates to local state only
+      scheduleUpdate(() => {
+        if (isDragging) { // Check if still dragging
+          applyEvaluation(y, rect, false);
+        }
+      });
+    } else if (isHovering) {
+      // Hover updates (only when not dragging)
+      scheduleUpdate(() => {
+        if (isHovering && !isDragging) { // Double-check state
+          hoverY = Math.max(0, Math.min(rect.height, y));
+          const result = positionToEvaluation(y, rect.height);
+          hoverValue = result.displayStr;
+        }
+      });
     }
   }
 
   // Handle mouse up
   function handleMouseUp(): void {
+    if (isDragging && dragState) {
+      // Commit drag state to reactive state
+      if (dragState.isMateGuess) {
+        isMateGuess = true;
+        isWhiteMate = dragState.isWhiteMate;
+        mateIn = 1;
+      } else {
+        isMateGuess = false;
+        currentGuess = dragState.currentGuess;
+      }
+    }
+
     isDragging = false;
+    dragState = null;
+
+    // Cancel any pending RAF updates
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      pendingUpdate = null;
+    }
   }
 
   // Handle mouse enter/leave for hover state
@@ -113,6 +222,14 @@
   function handleMouseLeave(): void {
     isHovering = false;
     isDragging = false;
+    dragState = null;
+
+    // Cancel any pending RAF updates
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      pendingUpdate = null;
+    }
   }
 
   // Handle keyboard shortcuts
@@ -167,13 +284,17 @@
   // Set up global mouse up listener
   onMount(() => {
     const handleGlobalMouseUp = () => {
-      isDragging = false;
+      handleMouseUp();
     };
 
     window.addEventListener('mouseup', handleGlobalMouseUp);
 
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
+      // Cleanup RAF on unmount
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
     };
   });
 </script>
@@ -194,16 +315,16 @@
     tabindex="0"
     role="slider"
     aria-label="Evaluation adjustment"
-    aria-valuenow={currentGuess}
+    aria-valuenow={dragState?.currentGuess ?? currentGuess}
     aria-valuemin={-20}
     aria-valuemax={20}
   >
-    <div class="black" style="height: {blackFill}%"></div>
-    <div class="white" style="height: {whiteFill}%"></div>
+    <div class="black" style="height: {dragState?.blackFill ?? blackFill}%"></div>
+    <div class="white" style="height: {dragState?.whiteFill ?? whiteFill}%"></div>
 
     <!-- Score display -->
-    <div class="score" class:mate={isMateGuess}>
-      {displayValue}
+    <div class="score" class:mate={dragState?.isMateGuess ?? isMateGuess}>
+      {dragState?.displayValue ?? displayValue}
     </div>
 
     <!-- Hover indicator -->
@@ -344,15 +465,15 @@
     cursor: grabbing;
   }
 
-  /* Bar fill colors */
+  /* Bar fill colors - removed transition for smooth dragging */
   .white {
     background: linear-gradient(to top, #ffffff, #f0f0f0);
     position: absolute;
     bottom: 0;
     left: 0;
     width: 100%;
-    transition: height 0.15s ease-out;
     pointer-events: none;
+    /* Removed transition during drag for better performance */
   }
 
   .black {
@@ -361,8 +482,14 @@
     top: 0;
     left: 0;
     width: 100%;
-    transition: height 0.15s ease-out;
     pointer-events: none;
+    /* Removed transition during drag for better performance */
+  }
+
+  /* Add transition back when not dragging */
+  .eval-bar:not(.dragging) .white,
+  .eval-bar:not(.dragging) .black {
+    transition: height 0.15s ease-out;
   }
 
   /* Score display */
