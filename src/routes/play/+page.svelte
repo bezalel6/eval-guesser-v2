@@ -63,43 +63,39 @@
       // Computer moves come from the engine, player moves come from the board
       const isComputerMove = !gameManager.isPlayerTurn();
 
-      // Play move sound
-      const chess = new ChessJS(gameManager.getFen());
-      const moveData = {
-        from: move.from,
-        to: move.to,
-        promotion: move.promotion
-      };
+      // Play move sound based on the move details in the move object
+      if (move.san) {
+        const chess = new ChessJS(move.fen || gameManager.getFen());
 
-      // Get move details for sound
-      const testMove = new ChessJS(gameManager.getFen());
-      testMove.undo(); // Go back one move to test it
-      const moveResult = testMove.move(moveData);
-
-      if (moveResult) {
         if (chess.isCheckmate()) {
           // Play win/lose sound based on who won
           soundManager.play(isComputerMove ? 'stalemate' : 'checkmate');
+        } else if (chess.isCheck()) {
+          soundManager.play('check');
+        } else if (move.san.includes('x')) {
+          soundManager.play('capture');
+        } else if (move.san === 'O-O' || move.san === 'O-O-O') {
+          soundManager.play('castle');
+        } else if (move.san.includes('=')) {
+          soundManager.play('promotion');
         } else {
-          moveSound.play({
-            capture: moveResult.captured !== undefined,
-            castle: moveResult.flags.includes('k') || moveResult.flags.includes('q'),
-            check: chess.isCheck(),
-            checkmate: chess.isCheckmate(),
-            promotion: moveResult.flags.includes('p')
-          });
+          soundManager.play(isComputerMove ? 'opponentMove' : 'move');
         }
       }
 
       // Only update the Chess component for computer moves
       // Player moves already updated the component directly
-      if (isComputerMove && chessComponent && move.from && move.to) {
-        // Make the move using the Chess component's API
-        chessComponent.move({
-          from: move.from,
-          to: move.to,
-          promotion: move.promotion
-        });
+      if (isComputerMove && chessComponent) {
+        // Use SAN notation if available, otherwise use from/to
+        if (move.san) {
+          chessComponent.move(move.san);
+        } else if (move.from && move.to) {
+          chessComponent.move({
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion
+          });
+        }
       }
 
       // Update move history
