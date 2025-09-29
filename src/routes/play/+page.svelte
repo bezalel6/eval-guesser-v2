@@ -25,6 +25,7 @@
   let gameStarted: boolean = false; // Track if game has started
   let showSettingsModal: boolean = true; // Show settings before game
   let chessComponent: any; // Reference to the Chess component
+  let isProcessingPlayerMove: boolean = false; // Flag to prevent double execution
 
   // Settings
   let playerColor: 'white' | 'black' = data.playerColor;
@@ -59,17 +60,43 @@
     gameManager.onMove(async (move) => {
       console.log('Move made:', move);
 
-      // Determine if this is a computer move
-      // Computer moves come from the engine, player moves come from the board
-      const isComputerMove = !gameManager.isPlayerTurn();
+      // Skip if this is a player move being processed (prevent double execution)
+      if (isProcessingPlayerMove) {
+        isProcessingPlayerMove = false;
 
-      // Play move sound based on the move details in the move object
+        // Still update move history and play sound for player moves
+        moveHistory = [...moveHistory, move];
+        currentFen = gameManager.getFen();
+
+        // Play move sound
+        if (move.san) {
+          const chess = new ChessJS(currentFen);
+          if (chess.isCheckmate()) {
+            soundManager.play('checkmate');
+          } else if (chess.isCheck()) {
+            soundManager.play('check');
+          } else if (move.san.includes('x')) {
+            soundManager.play('capture');
+          } else if (move.san === 'O-O' || move.san === 'O-O-O') {
+            soundManager.play('castle');
+          } else if (move.san.includes('=')) {
+            soundManager.play('promotion');
+          } else {
+            soundManager.play('move');
+          }
+        }
+
+        await tick();
+        return;
+      }
+
+      // This is a computer move
+      // Play move sound
       if (move.san) {
         const chess = new ChessJS(move.fen || gameManager.getFen());
 
         if (chess.isCheckmate()) {
-          // Play win/lose sound based on who won
-          soundManager.play(isComputerMove ? 'stalemate' : 'checkmate');
+          soundManager.play('stalemate'); // Computer won
         } else if (chess.isCheck()) {
           soundManager.play('check');
         } else if (move.san.includes('x')) {
@@ -79,13 +106,12 @@
         } else if (move.san.includes('=')) {
           soundManager.play('promotion');
         } else {
-          soundManager.play(isComputerMove ? 'opponentMove' : 'move');
+          soundManager.play('opponentMove');
         }
       }
 
-      // Only update the Chess component for computer moves
-      // Player moves already updated the component directly
-      if (isComputerMove && chessComponent) {
+      // Update the Chess component for computer moves
+      if (chessComponent) {
         // Use SAN notation if available, otherwise use from/to
         if (move.san) {
           chessComponent.move(move.san);
@@ -148,6 +174,9 @@
       return;
     }
 
+    // Set flag to indicate we're processing a player move
+    isProcessingPlayerMove = true;
+
     // The Chess component has already made the move visually
     // We just need to update the game manager's internal state
     // and trigger the computer's response
@@ -167,6 +196,9 @@
       setTimeout(() => {
         isThinking = gameManager.isComputerThinking();
       }, 100);
+    } else {
+      // Reset flag if move failed
+      isProcessingPlayerMove = false;
     }
   }
 
