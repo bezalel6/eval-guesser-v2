@@ -1,56 +1,48 @@
 <script lang="ts">
-  import 'chessground/assets/chessground.base.css';
-  import 'chessground/assets/chessground.cburnett.css';
   import { Chess } from 'svelte-chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import { browser } from '$app/environment';
-
-  // Import types from UCI parser
-  import type { AnalysisSnapshot, MoveAnalysisData } from '$lib/uciParser';
-  import { uciToSan, batchUciToSan } from '$lib/moveConversion';
+  import type { AnalysisSnapshot } from '$lib/uciParser';
 
   export let data: PageData;
 
-  // Initial position from URL (or default)
-  let initialFen: FEN = data.fen;
+  // Chess component reference
+  let chessComponent: Chess;
 
-  // Current position being analyzed (changes as moves are made)
-  let currentFen: FEN = initialFen;
+  // Current position being analyzed
+  let currentFen: FEN = data.fen;
+  let moveHistory: string[] = [];
+  let moveNumber: number = 1;
+  let turn: 'w' | 'b' = 'w';
 
-  let analysisDepth: number = 12; // Default analysis depth
-  let showSettings: boolean = false; // Settings collapse state
+  // Analysis settings
+  let analysisDepth: number = 12;
+  let showSettings: boolean = false;
   let currentAnalysis: AnalysisSnapshot | null = null;
+  let analysisInProgress: boolean = false;
 
   // Top engine moves (maximum 4)
   interface EngineMove {
-    move: string; // UCI format (e.g., "e2e4")
-    san: string; // Standard algebraic notation (e.g., "e4")
-    evaluation: string; // e.g., "+0.25"
+    move: string; // UCI format
+    san: string; // SAN notation
+    evaluation: string;
     depth: number;
-    multipv?: number; // MultiPV rank
-    pv?: string[]; // Principal variation
+    multipv?: number;
+    pv?: string[];
     nodes?: number;
   }
 
   let topMoves: EngineMove[] = [];
-  let analysisInProgress: boolean = false;
 
   // Handle analysis updates from EvaluationBar
   function handleAnalysis(event: CustomEvent<AnalysisSnapshot>): void {
     currentAnalysis = event.detail;
     analysisInProgress = !event.detail.isComplete;
 
-    // Convert to our display format and sort by score
+    // Convert to display format
     const moves: EngineMove[] = [];
     const isBlackToMove = currentFen.split(' ')[1] === 'b';
-
-    // Batch convert UCI moves to SAN for efficiency
-    const uciMoves = Array.from(event.detail.moves.keys());
-    const sanConversions = batchUciToSan(currentFen, uciMoves);
 
     for (const [move, analysis] of event.detail.moves.entries()) {
       // Convert score to display format
@@ -59,20 +51,13 @@
         const mateValue = isBlackToMove ? -analysis.score.value : analysis.score.value;
         evaluation = mateValue > 0 ? `+M${Math.abs(mateValue)}` : `-M${Math.abs(mateValue)}`;
       } else {
-        // Convert centipawns to pawns and adjust for perspective
         let score = analysis.score.value / 100;
         if (isBlackToMove) score = -score;
-
-        if (score > 0) {
-          evaluation = `+${score.toFixed(2)}`;
-        } else {
-          evaluation = score.toFixed(2);
-        }
+        evaluation = score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
       }
 
-      // Get SAN notation
-      const sanResult = sanConversions.get(move);
-      const san = sanResult?.san || move;
+      // For now, just use UCI notation (SAN conversion would need chess.js)
+      const san = move;
 
       moves.push({
         move: analysis.move,
@@ -85,13 +70,9 @@
       });
     }
 
-    // Sort by MultiPV rank first (if available), then by score
+    // Sort by MultiPV rank or score
     moves.sort((a, b) => {
-      // If both have MultiPV, sort by that (lower is better)
-      if (a.multipv && b.multipv) {
-        return a.multipv - b.multipv;
-      }
-      // Otherwise sort by score (higher is better)
+      if (a.multipv && b.multipv) return a.multipv - b.multipv;
       const scoreA = parseEvaluation(a.evaluation);
       const scoreB = parseEvaluation(b.evaluation);
       return scoreB - scoreA;
@@ -100,7 +81,7 @@
     topMoves = moves.slice(0, 4);
   }
 
-  // Helper to parse evaluation string to numeric value for sorting
+  // Parse evaluation string to numeric value
   function parseEvaluation(evaluation: string): number {
     if (evaluation.includes('M')) {
       const mateIn = parseInt(evaluation.replace(/[+-M]/g, ''));
@@ -109,17 +90,31 @@
     return parseFloat(evaluation);
   }
 
-  // Function removed - now using proper UCI to SAN conversion from moveConversion.ts
-
   // Play a move from the engine list
-  function playMove(move: string): void {
-    // TODO: Implement move playing through chess library
-    console.log('Playing move:', move);
+  function playMove(uciMove: string): void {
+    if (!chessComponent) return;
+
+    const from = uciMove.substring(0, 2);
+    const to = uciMove.substring(2, 4);
+    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+
+    // Make the move using the chess component's move method
+    // Note: svelte-chess's move method expects a string in UCI format
+    chessComponent.move(uciMove);
   }
 
   // Reset to initial position
   function resetToInitial(): void {
-    currentFen = initialFen;
+    currentFen = data.fen;
+    moveHistory = [];
+    if (chessComponent) {
+      chessComponent.load(data.fen);
+    }
+  }
+
+  // Handle move events
+  function handleMove(event: CustomEvent): void {
+    console.log('Move made:', event.detail);
   }
 </script>
 
@@ -161,8 +156,32 @@
             on:analysis={handleAnalysis}
           />
           <div class="board-wrapper-analysis">
-            <Chess bind:fen={currentFen} />
+            <Chess
+              bind:this={chessComponent}
+              bind:fen={currentFen}
+              bind:history={moveHistory}
+              bind:moveNumber
+              bind:turn
+              on:move={handleMove}
+            />
           </div>
+        </div>
+
+        <!-- Board Controls -->
+        <div class="mt-6 flex items-center justify-center space-x-4">
+          <button
+            on:click={resetToInitial}
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Reset Position
+          </button>
+          <button
+            on:click={() => chessComponent?.undo()}
+            disabled={moveHistory.length === 0}
+            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Undo Move
+          </button>
         </div>
       </div>
 
@@ -191,7 +210,7 @@
                 Analyzing position...
               </div>
             {:else}
-              {#each topMoves.slice(0, 4) as move, index}
+              {#each topMoves as move, index}
                 <button
                   on:click={() => playMove(move.move)}
                   class="w-full p-3 bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-gray-600 rounded-lg transition-colors cursor-pointer"
@@ -225,7 +244,7 @@
           </div>
         </div>
 
-        <!-- Collapsible Settings -->
+        <!-- Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
           <button
             on:click={() => showSettings = !showSettings}
@@ -251,15 +270,55 @@
                 <input
                   id="depth"
                   type="range"
-                  min="10"
-                  max="20"
+                  min="1"
+                  max="30"
                   bind:value={analysisDepth}
                   class="w-full"
                 />
+                <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>Fast</span>
+                  <span>Balanced</span>
+                  <span>Deep</span>
+                </div>
+              </div>
+
+              <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Turn:</span>
+                    <span class="font-medium text-gray-900 dark:text-white">
+                      {turn === 'w' ? 'White' : 'Black'}
+                    </span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Move:</span>
+                    <span class="font-medium text-gray-900 dark:text-white">{moveNumber}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">FEN:</span>
+                    <span class="font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                      {currentFen.split(' ').slice(0, 2).join(' ')}...
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           {/if}
         </div>
+
+        <!-- Move History -->
+        {#if moveHistory.length > 0}
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Move History</h2>
+            <div class="grid grid-cols-2 gap-1 text-sm font-mono max-h-48 overflow-y-auto">
+              {#each moveHistory as move, index}
+                <div class="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                  {index % 2 === 0 ? `${Math.floor(index / 2) + 1}. ` : ''}{move}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
     </div>
   </div>
@@ -285,43 +344,10 @@
     position: relative;
   }
 
-  /* Override chessground wrapper to exact size */
-  :global(.board-wrapper-analysis .cg-wrap) {
-    width: 600px !important;
-    height: 600px !important;
-  }
-
-  /* Force cg-container to match parent size */
-  :global(.board-wrapper-analysis cg-container) {
-    width: 600px !important;
-    height: 600px !important;
-  }
-
-  /* Ensure the board scales properly within the container */
-  :global(.board-wrapper-analysis .cg-wrap cg-board) {
+  /* svelte-chess handles board styling internally */
+  :global(.board-wrapper-analysis > div) {
     width: 100% !important;
     height: 100% !important;
-  }
-
-  /* Make coordinates more visible */
-  :global(.board-wrapper-analysis .cg-wrap coords) {
-    font-size: 14px !important;
-    font-weight: bold !important;
-    position: absolute !important;
-  }
-
-  :global(.board-wrapper-analysis .cg-wrap coords.ranks) {
-    left: 4px !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: 12px !important;
-  }
-
-  :global(.board-wrapper-analysis .cg-wrap coords.files) {
-    bottom: 4px !important;
-    left: 0 !important;
-    right: 0 !important;
-    height: 12px !important;
   }
 
   /* Responsive adjustments */

@@ -1,126 +1,99 @@
 <script lang="ts">
-  import 'chessground/assets/chessground.base.css';
-  import 'chessground/assets/chessground.cburnett.css';
-  import { onMount, onDestroy, tick } from 'svelte';
   import { Chess } from 'svelte-chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
-  import { GameManager, type GameMove, type GameState } from '$lib/gameManager';
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';
-  import { browser } from '$app/environment';
 
   export let data: PageData;
 
-  // Game state
-  let gameManager: GameManager;
+  // Game state - all managed by svelte-chess component
   let currentFen: FEN = data.fen;
-  let gameState: GameState;
-  let moveHistory: GameMove[] = [];
-  let isThinking: boolean = false;
-  let showEvaluation: boolean = true;
-  let moveCount: number = 0; // Track total moves for key
-  let gameStarted: boolean = false; // Track if game has started
-  let showSettingsModal: boolean = true; // Show settings before game
+  let moveHistory: string[] = []; // SAN notation from svelte-chess
+  let moveNumber: number = 1;
+  let turn: 'w' | 'b' = 'w';
+  let isGameOver: boolean = false;
+  let inCheck: boolean = false;
+  let gameStarted: boolean = false;
+  let showSettingsModal: boolean = true;
+
+  // Chess component reference for methods
+  let chessComponent: Chess;
 
   // Settings
   let playerColor: 'white' | 'black' = data.playerColor;
   let computerLevel: number = data.computerLevel;
+  let showEvaluation: boolean = true;
+
+  // Engine configuration based on settings
+  // svelte-chess engine prop format
+  let engineConfig: any;
+  $: engineConfig = gameStarted ? {
+    color: playerColor === 'white' ? 'black' : 'white',
+    depth: Math.max(1, Math.min(20, computerLevel)),
+    moveTime: computerLevel >= 15 ? 2000 : computerLevel >= 10 ? 1000 : 500
+  } : undefined;
+
+  // Orientation based on player color
+  let orientation: 'w' | 'b';
+  $: orientation = playerColor === 'black' ? 'b' : 'w';
 
   // Start a new game with selected settings
   function startGame(): void {
-    if (!browser) return;
-
-    // Initialize game manager
-    gameManager = new GameManager(data.fen, playerColor, computerLevel);
-
-    // Set up callbacks
-    gameManager.onMove(async (move) => {
-      const newFen = move.fen || gameManager.getFen();
-      console.log('Move made, updating FEN from:', currentFen, 'to:', newFen);
-
-      // Force update by reassigning (triggers Svelte reactivity)
-      currentFen = newFen;
-      moveHistory = [...moveHistory, move];
-      moveCount++; // Increment to force re-render
-
-      // Ensure DOM updates
-      await tick();
-    });
-
-    gameManager.onStateChange((state) => {
-      gameState = state;
-    });
-
-    // Initialize engine
-    gameManager.initEngine();
-
-    // Get initial state
-    gameState = gameManager.getState();
-
-    // Hide modal and start game
+    currentFen = data.fen;
+    moveHistory = [];
     showSettingsModal = false;
     gameStarted = true;
   }
 
-  onDestroy(() => {
-    gameManager?.destroy();
-  });
-
   // Handle moves from the chess board
   function handleMove(event: CustomEvent<any>): void {
-    if (!gameManager || !gameManager.isPlayerTurn()) return;
-
     const move = event.detail;
-    console.log('Player move event:', move);
+    console.log('Move made:', move);
+    // svelte-chess handles everything internally!
+    // The move object contains: san, from, to, piece, etc.
+  }
 
-    // The Chess component has already updated currentFen through binding
-    // We just need to tell the game manager about the move
-    const success = gameManager.makePlayerMove({
-      from: move.from,
-      to: move.to,
-      promotion: move.promotion
-    });
+  // Handle game over
+  function handleGameOver(event: CustomEvent<any>): void {
+    const { reason, result } = event.detail;
+    console.log(`Game over: ${reason}, result: ${result}`);
+    // Could show a modal or notification here
+  }
 
-    if (success) {
-      isThinking = true;
-      setTimeout(() => {
-        isThinking = gameManager.isComputerThinking();
-      }, 100);
-    }
+  // Handle ready event
+  function handleReady(): void {
+    console.log('Chess component ready');
   }
 
   // New game
   function newGame(): void {
-    // Destroy current game
-    gameManager?.destroy();
-    gameManager = null;
-
-    // Reset state
+    gameStarted = false;
     moveHistory = [];
     currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    gameStarted = false;
-    moveCount = 0;
-
-    // Show settings modal for new game
     showSettingsModal = true;
-  }
 
-  // Undo move
-  function undoMove(): void {
-    if (gameManager && !isThinking) {
-      gameManager.undo();
-      currentFen = gameManager.getFen();
-      // Remove last two moves from history (player and computer)
-      moveHistory = moveHistory.slice(0, -2);
+    // Reset the chess component
+    if (chessComponent) {
+      chessComponent.reset();
     }
   }
 
+  // Undo move - svelte-chess handles this beautifully
+  function undoMove(): void {
+    if (chessComponent && !isGameOver) {
+      // Undo twice when playing against computer (player move + computer move)
+      chessComponent.undo();
+      if (engineConfig) {
+        chessComponent.undo();
+      }
+    }
+  }
 
   // Format move for display
-  function formatMove(move: GameMove, index: number): string {
-    const moveNumber = Math.floor(index / 2) + 1;
+  function formatMove(move: string, index: number): string {
+    const moveNum = Math.floor(index / 2) + 1;
     const isWhite = index % 2 === 0;
-    return isWhite ? `${moveNumber}. ${move.san}` : move.san || '';
+    return isWhite ? `${moveNum}. ${move}` : move;
   }
 </script>
 
@@ -149,12 +122,20 @@
             />
           {/if}
           <div class="board-wrapper-play">
-            {#key moveCount}
-              <Chess
-                fen={currentFen}
-                on:move={handleMove}
-              />
-            {/key}
+            <Chess
+              bind:this={chessComponent}
+              bind:fen={currentFen}
+              bind:history={moveHistory}
+              bind:moveNumber
+              bind:turn
+              bind:isGameOver
+              bind:inCheck
+              {orientation}
+              engine={engineConfig}
+              on:move={handleMove}
+              on:gameOver={handleGameOver}
+              on:ready={handleReady}
+            />
           </div>
         </div>
 
@@ -168,7 +149,7 @@
           </button>
           <button
             on:click={undoMove}
-            disabled={moveHistory.length < 2 || isThinking}
+            disabled={moveHistory.length < 2 || isGameOver}
             class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Undo
@@ -178,6 +159,19 @@
 
       <!-- Sidebar -->
       <div class="space-y-6">
+        <!-- Game Status -->
+        {#if inCheck}
+          <div class="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-lg p-4 text-center font-semibold">
+            Check!
+          </div>
+        {/if}
+
+        {#if isGameOver}
+          <div class="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg p-4 text-center font-semibold">
+            Game Over
+          </div>
+        {/if}
+
         <!-- Move History -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Moves</h2>
@@ -198,7 +192,30 @@
           </div>
         </div>
 
-
+        <!-- Game Info -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Game Info</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Turn:</span>
+              <span class="font-medium text-gray-900 dark:text-white">
+                {turn === 'w' ? 'White' : 'Black'}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Move:</span>
+              <span class="font-medium text-gray-900 dark:text-white">{moveNumber}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Playing as:</span>
+              <span class="font-medium text-gray-900 dark:text-white capitalize">{playerColor}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Computer Level:</span>
+              <span class="font-medium text-gray-900 dark:text-white">{computerLevel}/20</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -214,9 +231,9 @@
         <div class="space-y-6">
           <!-- Player Color -->
           <div>
-            <label for="modal-player-color" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <div class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Play as
-            </label>
+            </div>
             <div class="grid grid-cols-2 gap-4">
               <button
                 on:click={() => playerColor = 'white'}
@@ -237,11 +254,11 @@
 
           <!-- Computer Level -->
           <div>
-            <label for="modal-level" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label for="computer-level" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Computer Strength: {computerLevel}
             </label>
             <input
-              id="modal-level"
+              id="computer-level"
               type="range"
               min="1"
               max="20"
@@ -310,21 +327,11 @@
     position: relative;
   }
 
-  :global(.board-wrapper-play .cg-wrap) {
-    width: 600px !important;
-    height: 600px !important;
-  }
-
-  :global(.board-wrapper-play cg-container) {
-    width: 600px !important;
-    height: 600px !important;
-  }
-
-  :global(.board-wrapper-play .cg-wrap cg-board) {
+  /* svelte-chess handles board styling internally, we just need wrapper */
+  :global(.board-wrapper-play > div) {
     width: 100% !important;
     height: 100% !important;
   }
-
 
   /* Responsive adjustments */
   @media (max-width: 1024px) {
