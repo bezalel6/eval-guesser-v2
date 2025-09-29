@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Chess } from 'svelte-chess';
+  import { Chess } from '$lib/chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';

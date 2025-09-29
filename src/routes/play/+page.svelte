@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { Chess } from 'svelte-chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';
-
+	import { Chess, Engine } from '$lib/chess';
+ 
   export let data: PageData;
-
   // Game state - all managed by svelte-chess component
   let currentFen: FEN = data.fen;
   let moveHistory: string[] = []; // SAN notation from svelte-chess
@@ -25,13 +24,13 @@
   let showEvaluation: boolean = true;
 
   // Engine configuration based on settings
-  // svelte-chess engine prop format
-  let engineConfig: any;
-  $: engineConfig = gameStarted ? {
-    color: playerColor === 'white' ? 'black' : 'white',
+  // Create Engine instance when game starts
+  let engineConfig: Engine | undefined;
+  $: engineConfig = gameStarted ? new Engine({
+    color: playerColor === 'white' ? 'b' : 'w', // Engine plays opposite color
     depth: Math.max(1, Math.min(20, computerLevel)),
     moveTime: computerLevel >= 15 ? 2000 : computerLevel >= 10 ? 1000 : 500
-  } : undefined;
+  }) : undefined;
 
   // Orientation based on player color
   let orientation: 'w' | 'b';

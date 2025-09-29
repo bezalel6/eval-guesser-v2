@@ -8,12 +8,18 @@ importers:
 
   .:
     dependencies:
+      chess.js:
+        specifier: ^1.4.0
+        version: 1.4.0
       postgres:
         specifier: ^3.4.5
         version: 3.4.7
       svelte-chess:
         specifier: ^0.11.1
         version: 0.11.1(svelte@5.39.6)
+      svelte-chessground:
+        specifier: ^2.0.3
+        version: 2.0.3(svelte@5.39.6)
     devDependencies:
       '@eslint/compat':
         specifier: ^1.2.5
