@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { FEN, AnalysisDepth, StockfishWorker, StockfishMessage, Color } from '$lib/types/chess';
+  import { createEventDispatcher } from 'svelte';
+  import type { FEN, AnalysisDepth, StockfishWorker, StockfishMessage } from '$lib/types/chess';
+  import { UCIParser } from '$lib/uciParser';
 
   // Props
   export let fen: FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Default starting position
@@ -10,10 +12,21 @@
   let score: number = 0; // Evaluation score (positive = white advantage)
   let displayScore: string = '0.00'; // Display string for the score
   let isMate: boolean = false;
-  let mateIn: number = 0;
   let worker: StockfishWorker | undefined;
 
-  const MATE_SCORE: number = 1000; // Base score for mate evaluation
+  const dispatch = createEventDispatcher();
+  const uciParser = new UCIParser();
+
+  // Set up real-time analysis callback
+  uciParser.setAnalysisCallback((snapshot) => {
+    console.log('[EvaluationBar] Analysis snapshot:', {
+      depth: snapshot.depth,
+      movesCount: snapshot.moves.size,
+      moves: Array.from(snapshot.moves.keys()),
+      isComplete: snapshot.isComplete
+    });
+    dispatch('analysis', snapshot);
+  });
 
   onMount((): void => {
     worker = new Worker('/stockfish.js') as StockfishWorker;
@@ -25,81 +38,45 @@
     if (worker) worker.terminate();
   });
 
-  $: if (fen) analyzePosition(); // React to FEN changes
+  $: if (fen) {
+    // Clear previous analysis when position changes
+    const isBlackToMove = fen.split(' ')[1] === 'b';
+    uciParser.reset();
+    uciParser.setSideToMove(isBlackToMove);
+    analyzePosition();
+  }
 
   function analyzePosition(): void {
     if (!worker) return;
     worker.postMessage('uci');
     worker.postMessage('isready');
     worker.postMessage(`position fen ${fen}`);
+    // Enable MultiPV for multiple best moves and set analysis depth
+    worker.postMessage('setoption name MultiPV value 4');
     worker.postMessage(`go depth ${depth}`);
   }
 
   function handleMessage(event: MessageEvent<StockfishMessage>): void {
     const message: StockfishMessage = event.data;
+
     if (typeof message === 'string') {
-      // Stockfish reports score from the perspective of the side to move
-      // We need to convert to always show from white's perspective
-      const isBlackToMove: boolean = fen.split(' ')[1] === 'b';
+      // Parse UCI info messages for move analysis
+      if (message.startsWith('info ')) {
+        uciParser.parseInfo(message);
 
-      // Check for mate score first
-      const mateMatch: RegExpMatchArray | null = message.match(/score mate (-?\d+)/);
-      if (mateMatch) {
-        mateIn = parseInt(mateMatch[1], 10);
-        isMate = true;
-
-        // Special handling for mate 0 (checkmate on board)
-        if (mateIn === 0) {
-          // When it's mate 0, the side to move is in checkmate (they lost)
-          // So if it's black to move, white has won, and vice versa
-          if (isBlackToMove) {
-            score = MATE_SCORE + 100; // White has won - highest possible score (ensure complete fill)
-            displayScore = '#';  // Just show # for checkmate
-          } else {
-            score = -(MATE_SCORE + 100); // Black has won - lowest possible score (ensure complete fill)
-            displayScore = '#';  // Just show # for checkmate
-          }
-        } else {
-          // Convert to white's perspective if black to move
-          if (isBlackToMove) {
-            mateIn = -mateIn;
-          }
-
-          // Use a very high score for mate, scaled by moves to mate
-          // Closer mates get higher scores (M1 > M2 > M3, etc.)
-          // But M0 (checkmate) is always highest
-          score = MATE_SCORE - Math.abs(mateIn);
-          if (mateIn < 0) score = -score;
-
-          // Display format
-          if (mateIn > 0) {
-            displayScore = '+M' + Math.abs(mateIn);
-          } else {
-            displayScore = '-M' + Math.abs(mateIn);
-          }
+        // Also parse for evaluation bar display
+        const evalResult = uciParser.parseEvaluation(message);
+        if (evalResult) {
+          score = evalResult.score;
+          displayScore = evalResult.displayScore;
+          isMate = evalResult.isMate;
         }
-      } else {
-        // Check for centipawn score
-        const cpMatch: RegExpMatchArray | null = message.match(/score cp (-?\d+)/);
-        if (cpMatch) {
-          isMate = false;
-          mateIn = 0;
-          let rawScore: number = parseInt(cpMatch[1], 10) / 100; // Convert to pawns
+      }
 
-          // Convert to white's perspective if black to move
-          if (isBlackToMove) {
-            rawScore = -rawScore;
-          }
-
-          score = rawScore;
-
-          // Format display score
-          if (score > 0) {
-            displayScore = '+' + score.toFixed(2);
-          } else {
-            displayScore = score.toFixed(2);
-          }
-        }
+      // When analysis completes, emit final data
+      if (message.startsWith('bestmove')) {
+        const snapshot = uciParser.handleBestMove(message);
+        dispatch('analysis', snapshot);
       }
     }
   }

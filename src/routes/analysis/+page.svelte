@@ -7,68 +7,125 @@
   import type { FEN } from '$lib/types/chess';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { browser } from '$app/environment';
+
+  // Import types from UCI parser
+  import type { AnalysisSnapshot, MoveAnalysisData } from '$lib/uciParser';
+  import { uciToSan, batchUciToSan } from '$lib/moveConversion';
 
   export let data: PageData;
 
-  // Use the FEN from server or fallback to default
-  let currentFen: FEN = data.fen;
-  let analysisDepth: number = 20; // Deeper analysis for the analysis page
-  let fenInput: string = currentFen;
-  let showFenInput: boolean = false;
+  // Initial position from URL (or default)
+  let initialFen: FEN = data.fen;
 
-  // Update URL when FEN changes (for shareable analysis links)
-  function updateURL(fen: FEN): void {
-    const url = new URL($page.url);
-    if (fen !== 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
-      url.searchParams.set('fen', encodeURIComponent(fen));
-    } else {
-      url.searchParams.delete('fen');
+  // Current position being analyzed (changes as moves are made)
+  let currentFen: FEN = initialFen;
+
+  let analysisDepth: number = 12; // Default analysis depth
+  let showSettings: boolean = false; // Settings collapse state
+  let currentAnalysis: AnalysisSnapshot | null = null;
+
+  // Top engine moves (maximum 4)
+  interface EngineMove {
+    move: string; // UCI format (e.g., "e2e4")
+    san: string; // Standard algebraic notation (e.g., "e4")
+    evaluation: string; // e.g., "+0.25"
+    depth: number;
+    multipv?: number; // MultiPV rank
+    pv?: string[]; // Principal variation
+    nodes?: number;
+  }
+
+  let topMoves: EngineMove[] = [];
+  let analysisInProgress: boolean = false;
+
+  // Handle analysis updates from EvaluationBar
+  function handleAnalysis(event: CustomEvent<AnalysisSnapshot>): void {
+    console.log('[Analysis Page] Received analysis:', {
+      depth: event.detail.depth,
+      movesCount: event.detail.moves.size,
+      moves: Array.from(event.detail.moves.keys()),
+      isComplete: event.detail.isComplete
+    });
+    currentAnalysis = event.detail;
+    analysisInProgress = !event.detail.isComplete;
+
+    // Convert to our display format and sort by score
+    const moves: EngineMove[] = [];
+    const isBlackToMove = currentFen.split(' ')[1] === 'b';
+
+    // Batch convert UCI moves to SAN for efficiency
+    const uciMoves = Array.from(event.detail.moves.keys());
+    const sanConversions = batchUciToSan(currentFen, uciMoves);
+
+    for (const [move, analysis] of event.detail.moves.entries()) {
+      // Convert score to display format
+      let evaluation: string;
+      if (analysis.score.type === 'mate') {
+        const mateValue = isBlackToMove ? -analysis.score.value : analysis.score.value;
+        evaluation = mateValue > 0 ? `+M${Math.abs(mateValue)}` : `-M${Math.abs(mateValue)}`;
+      } else {
+        // Convert centipawns to pawns and adjust for perspective
+        let score = analysis.score.value / 100;
+        if (isBlackToMove) score = -score;
+
+        if (score > 0) {
+          evaluation = `+${score.toFixed(2)}`;
+        } else {
+          evaluation = score.toFixed(2);
+        }
+      }
+
+      // Get SAN notation
+      const sanResult = sanConversions.get(move);
+      const san = sanResult?.san || move;
+
+      moves.push({
+        move: analysis.move,
+        san,
+        evaluation,
+        depth: analysis.depth,
+        multipv: analysis.multipv,
+        pv: analysis.pv,
+        nodes: analysis.nodes
+      });
     }
-    goto(url.toString(), { replaceState: true, noScroll: true });
+
+    // Sort by MultiPV rank first (if available), then by score
+    moves.sort((a, b) => {
+      // If both have MultiPV, sort by that (lower is better)
+      if (a.multipv && b.multipv) {
+        return a.multipv - b.multipv;
+      }
+      // Otherwise sort by score (higher is better)
+      const scoreA = parseEvaluation(a.evaluation);
+      const scoreB = parseEvaluation(b.evaluation);
+      return scoreB - scoreA;
+    });
+
+    topMoves = moves.slice(0, 4);
   }
 
-  // Handle FEN input submission
-  function submitFEN(): void {
-    const trimmedFen = fenInput.trim();
-    if (trimmedFen) {
-      currentFen = trimmedFen as FEN;
-      updateURL(currentFen);
-      showFenInput = false;
+  // Helper to parse evaluation string to numeric value for sorting
+  function parseEvaluation(evaluation: string): number {
+    if (evaluation.includes('M')) {
+      const mateIn = parseInt(evaluation.replace(/[+-M]/g, ''));
+      return evaluation.startsWith('+') ? 10000 - mateIn : -10000 + mateIn;
     }
+    return parseFloat(evaluation);
   }
 
-  // Reset to starting position
-  function resetPosition(): void {
-    currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    fenInput = currentFen;
-    updateURL(currentFen);
+  // Function removed - now using proper UCI to SAN conversion from moveConversion.ts
+
+  // Play a move from the engine list
+  function playMove(move: string): void {
+    // TODO: Implement move playing through chess library
+    console.log('Playing move:', move);
   }
 
-  // Copy FEN to clipboard
-  async function copyFEN(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(currentFen);
-      // You could add a toast notification here
-    } catch (err) {
-      console.error('Failed to copy FEN:', err);
-    }
-  }
-
-  // Copy analysis link to clipboard
-  async function copyLink(): Promise<void> {
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('fen', encodeURIComponent(currentFen));
-      await navigator.clipboard.writeText(url.toString());
-      // You could add a toast notification here
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
-  }
-
-  // React to FEN changes from chess moves
-  $: if (currentFen) {
-    fenInput = currentFen;
+  // Reset to initial position
+  function resetToInitial(): void {
+    currentFen = initialFen;
   }
 </script>
 
@@ -104,102 +161,110 @@
       <!-- Chess Board with Evaluation Bar -->
       <div class="lg:col-span-2">
         <div class="chess-container-analysis">
-          <EvaluationBar fen={currentFen} depth={analysisDepth} />
+          <EvaluationBar
+            fen={currentFen}
+            depth={analysisDepth}
+            on:analysis={handleAnalysis}
+          />
           <div class="board-wrapper-analysis">
             <Chess bind:fen={currentFen} />
           </div>
         </div>
       </div>
 
-      <!-- Controls Panel -->
+      <!-- Sidebar -->
       <div class="space-y-6">
-        <!-- Position Controls -->
+        <!-- Engine Lines -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Position Controls</h2>
-
-          <div class="space-y-4">
-            <button
-              on:click={resetPosition}
-              class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Reset to Starting Position
-            </button>
-
-            <button
-              on:click={() => showFenInput = !showFenInput}
-              class="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              {showFenInput ? 'Hide' : 'Load'} Custom FEN
-            </button>
-
-            {#if showFenInput}
-              <div class="space-y-2">
-                <input
-                  type="text"
-                  bind:value={fenInput}
-                  placeholder="Enter FEN string..."
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  on:keydown={(e) => e.key === 'Enter' && submitFEN()}
-                />
-                <button
-                  on:click={submitFEN}
-                  class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Load Position
-                </button>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Best Moves</h2>
+            {#if currentAnalysis}
+              <div class="flex items-center space-x-2">
+                {#if analysisInProgress}
+                  <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                {/if}
+                <span class="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                  Depth {currentAnalysis.depth}
+                </span>
               </div>
+            {/if}
+          </div>
+
+          <div class="space-y-2">
+            {#if topMoves.length === 0}
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div class="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                Analyzing position...
+              </div>
+            {:else}
+              {#each topMoves.slice(0, 4) as move, index}
+                <button
+                  on:click={() => playMove(move.move)}
+                  class="w-full p-3 bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-gray-600 rounded-lg transition-colors cursor-pointer"
+                >
+                  <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center space-x-3">
+                      <span class="text-sm font-bold text-gray-500 dark:text-gray-400">
+                        {move.multipv || (index + 1)}.
+                      </span>
+                      <span class="font-medium text-gray-900 dark:text-white">
+                        {move.san}
+                      </span>
+                    </div>
+                    <span class="text-sm font-mono font-medium {move.evaluation.startsWith('+') ? 'text-green-600 dark:text-green-400' : move.evaluation.startsWith('-') ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}">
+                      {move.evaluation}
+                    </span>
+                  </div>
+                  {#if move.pv && move.pv.length > 1}
+                    <div class="text-xs text-gray-500 dark:text-gray-400 text-left truncate">
+                      {move.pv.slice(0, 5).join(' ')}...
+                    </div>
+                  {/if}
+                  {#if move.nodes}
+                    <div class="text-xs text-gray-400 dark:text-gray-500 text-left">
+                      {(move.nodes / 1000).toFixed(0)}k nodes
+                    </div>
+                  {/if}
+                </button>
+              {/each}
             {/if}
           </div>
         </div>
 
-        <!-- Analysis Settings -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Analysis Settings</h2>
+        <!-- Collapsible Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+          <button
+            on:click={() => showSettings = !showSettings}
+            class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded-lg"
+          >
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Settings</h2>
+            <svg
+              class="w-5 h-5 text-gray-600 dark:text-gray-400 transition-transform {showSettings ? 'rotate-180' : ''}"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-          <div class="space-y-4">
-            <div>
-              <label for="depth" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Analysis Depth: {analysisDepth}
-              </label>
-              <input
-                id="depth"
-                type="range"
-                min="10"
-                max="30"
-                bind:value={analysisDepth}
-                class="w-full"
-              />
+          {#if showSettings}
+            <div class="px-4 pb-4">
+              <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <label for="depth" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Analysis Depth: {analysisDepth}
+                </label>
+                <input
+                  id="depth"
+                  type="range"
+                  min="10"
+                  max="20"
+                  bind:value={analysisDepth}
+                  class="w-full"
+                />
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Share & Export -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Share & Export</h2>
-
-          <div class="space-y-4">
-            <button
-              on:click={copyFEN}
-              class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              Copy FEN to Clipboard
-            </button>
-
-            <button
-              on:click={copyLink}
-              class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Copy Analysis Link
-            </button>
-          </div>
-        </div>
-
-        <!-- Current FEN Display -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Current Position</h2>
-          <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg break-all">
-            <code class="text-sm text-gray-800 dark:text-gray-200">{currentFen}</code>
-          </div>
+          {/if}
         </div>
       </div>
     </div>
