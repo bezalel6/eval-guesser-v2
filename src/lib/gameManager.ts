@@ -23,10 +23,6 @@ export interface GameState {
   isDraw: boolean;
   turn: 'w' | 'b';
   moveHistory: GameMove[];
-  capturedPieces: {
-    white: string[];
-    black: string[];
-  };
 }
 
 export class GameManager {
@@ -99,7 +95,6 @@ export class GameManager {
    */
   getState(): GameState {
     const history = this.chess.history({ verbose: true });
-    const capturedPieces = this.getCapturedPieces(history);
 
     return {
       fen: this.chess.fen(),
@@ -115,25 +110,8 @@ export class GameManager {
         promotion: m.promotion,
         san: m.san,
         fen: m.after
-      })),
-      capturedPieces
+      }))
     };
-  }
-
-  /**
-   * Get captured pieces from move history
-   */
-  private getCapturedPieces(history: any[]): { white: string[]; black: string[] } {
-    const captured: { white: string[]; black: string[] } = { white: [], black: [] };
-
-    for (const move of history) {
-      if (move.captured) {
-        const color: 'white' | 'black' = move.color === 'w' ? 'black' : 'white';
-        captured[color].push(move.captured);
-      }
-    }
-
-    return captured;
   }
 
   /**
