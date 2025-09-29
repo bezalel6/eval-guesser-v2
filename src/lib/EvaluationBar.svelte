@@ -37,7 +37,6 @@
 
   function handleMessage(event: MessageEvent<StockfishMessage>): void {
     const message: StockfishMessage = event.data;
-    console.log(message)
     if (typeof message === 'string') {
       // Stockfish reports score from the perspective of the side to move
       // We need to convert to always show from white's perspective
