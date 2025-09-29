@@ -48,6 +48,9 @@
       depth: analysisDepth,
       moveTime: 5000 // Allow more time for deep analysis
     });
+
+    // Engine automatically analyzes when attached to Chess component
+    // No manual triggering needed - the library handles everything
   });
 
   // Handle UCI messages from the Chess component
@@ -71,29 +74,18 @@
     // The existing handleAnalysis will still work via the EvaluationBar's dispatch
   }
 
-  // Update analysis depth when slider changes
-  $: if (analysisEngine && analysisDepth) {
-    // Recreate engine with new depth
-    analysisEngine = new Engine({
-      color: 'none',
-      depth: analysisDepth,
-      moveTime: 5000
-    });
-  }
-
-  // Trigger analysis when position changes
-  $: if (analysisEngine && currentFen) {
-    // The Chess component will automatically analyze the position
-    // when it receives a new FEN with an engine attached
-    triggerAnalysis();
-  }
-
-  function triggerAnalysis(): void {
-    // The Chess component with an analysis engine will analyze automatically
-    // We just need to ensure the engine is set up correctly
-    if (chessComponent && analysisEngine) {
-      // For analysis mode, we might want to manually trigger
-      // This depends on how the Chess component handles 'none' color engines
+  // Handle depth changes without recreating engine
+  // Note: The library doesn't provide a setDepth method, so we need to recreate
+  // But only when user actually changes the slider, not on every reactive update
+  function updateAnalysisDepth(newDepth: number): void {
+    if (newDepth !== analysisDepth) {
+      analysisDepth = newDepth;
+      // Only recreate if depth actually changed
+      analysisEngine = new Engine({
+        color: 'none',
+        depth: analysisDepth,
+        moveTime: 5000
+      });
     }
   }
 
@@ -155,14 +147,8 @@
   // Play a move from the engine list
   function playMove(uciMove: string): void {
     if (!chessComponent) return;
-
-    const from = uciMove.substring(0, 2);
-    const to = uciMove.substring(2, 4);
-    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-
-    // Make the move using the chess component's move method
-    // Note: svelte-chess's move method expects a string in UCI format
-    chessComponent.move(uciMove);
+    // Use moveLan for UCI format moves (e.g., "e2e4", "e7e8q" for promotion)
+    chessComponent.moveLan(uciMove);
   }
 
   // Reset to initial position
@@ -336,7 +322,8 @@
                   type="range"
                   min="1"
                   max="30"
-                  bind:value={analysisDepth}
+                  value={analysisDepth}
+                  on:change={(e) => updateAnalysisDepth(parseInt(e.currentTarget.value))}
                   class="w-full"
                 />
                 <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">

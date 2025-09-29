@@ -81,6 +81,11 @@
 		if ( ! api ) throw new Error( 'component not mounted yet' );
 		return api.playEngineMove();
 	}
+	// Expose moveLan for UCI format moves (e.g., "e2e4")
+	export function moveLan(uciMove: string): void {
+		if ( ! api ) throw new Error( 'component not mounted yet' );
+		api.moveLan(uciMove);
+	}
 
 	/*
 	 * API Construction
