@@ -23,10 +23,12 @@
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    max-width: 800px;
+    width: 640px; /* Fixed width: 40px eval bar + 600px board */
     margin: 0 auto;
-    gap: 1.5rem;
     height: 600px; /* Fixed height for the container */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
   }
 
   .board-wrapper {
