@@ -8,6 +8,9 @@
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';
   import { browser } from '$app/environment';
+  import { soundStore, soundManager } from '$lib/sound';
+  import { useChessMoveSound } from '$lib/sound';
+  import { Chess as ChessJS } from 'chess.js';
 
   export let data: PageData;
 
@@ -26,6 +29,9 @@
   // Settings
   let playerColor: 'white' | 'black' = data.playerColor;
   let computerLevel: number = data.computerLevel;
+
+  // Sound
+  const moveSound = useChessMoveSound();
 
   // Start a new game with selected settings
   async function startGame(): Promise<void> {
@@ -52,6 +58,33 @@
     // Set up callbacks
     gameManager.onMove(async (move) => {
       console.log('Move made:', move);
+
+      // Play move sound
+      const chess = new ChessJS(currentFen);
+      const moveResult = chess.move({
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion
+      });
+
+      if (moveResult) {
+        // Check if it's computer's move (opposite of player color)
+        const isComputerMove = (chess.turn() === 'b' && playerColor === 'white') ||
+                               (chess.turn() === 'w' && playerColor === 'black');
+
+        if (chess.isCheckmate()) {
+          // Play win/lose sound based on who won
+          soundManager.play(isComputerMove ? 'checkmate' : 'stalemate');
+        } else {
+          moveSound.play({
+            capture: moveResult.captured !== undefined,
+            castle: moveResult.flags.includes('k') || moveResult.flags.includes('q'),
+            check: chess.isCheck(),
+            checkmate: chess.isCheckmate(),
+            promotion: moveResult.flags.includes('p')
+          });
+        }
+      }
 
       // Use the Chess component's move method if it's a computer move
       if (chessComponent && move.from && move.to) {
@@ -88,6 +121,13 @@
     showSettingsModal = false;
     gameStarted = true;
   }
+
+  onMount(async () => {
+    // Initialize sound system
+    if (browser) {
+      await soundStore.init();
+    }
+  });
 
   onDestroy(() => {
     gameManager?.destroy();
