@@ -59,22 +59,27 @@
     gameManager.onMove(async (move) => {
       console.log('Move made:', move);
 
+      // Determine if this is a computer move
+      // Computer moves come from the engine, player moves come from the board
+      const isComputerMove = !gameManager.isPlayerTurn();
+
       // Play move sound
-      const chess = new ChessJS(currentFen);
-      const moveResult = chess.move({
+      const chess = new ChessJS(gameManager.getFen());
+      const moveData = {
         from: move.from,
         to: move.to,
         promotion: move.promotion
-      });
+      };
+
+      // Get move details for sound
+      const testMove = new ChessJS(gameManager.getFen());
+      testMove.undo(); // Go back one move to test it
+      const moveResult = testMove.move(moveData);
 
       if (moveResult) {
-        // Check if it's computer's move (opposite of player color)
-        const isComputerMove = (chess.turn() === 'b' && playerColor === 'white') ||
-                               (chess.turn() === 'w' && playerColor === 'black');
-
         if (chess.isCheckmate()) {
           // Play win/lose sound based on who won
-          soundManager.play(isComputerMove ? 'checkmate' : 'stalemate');
+          soundManager.play(isComputerMove ? 'stalemate' : 'checkmate');
         } else {
           moveSound.play({
             capture: moveResult.captured !== undefined,
@@ -86,8 +91,9 @@
         }
       }
 
-      // Use the Chess component's move method if it's a computer move
-      if (chessComponent && move.from && move.to) {
+      // Only update the Chess component for computer moves
+      // Player moves already updated the component directly
+      if (isComputerMove && chessComponent && move.from && move.to) {
         // Make the move using the Chess component's API
         chessComponent.move({
           from: move.from,
@@ -135,12 +141,22 @@
 
   // Handle moves from the chess board
   function handleMove(event: CustomEvent<any>): void {
-    if (!gameManager || !gameManager.isPlayerTurn()) return;
+    if (!gameManager) return;
 
     const move = event.detail;
     console.log('Player move event:', move);
 
-    // Tell the game manager about the move
+    // Check if it's the player's turn
+    if (!gameManager.isPlayerTurn()) {
+      console.log('Not player turn, ignoring move');
+      return;
+    }
+
+    // The Chess component has already made the move visually
+    // We just need to update the game manager's internal state
+    // and trigger the computer's response
+
+    // Update game manager's internal chess.js instance to match
     const success = gameManager.makePlayerMove({
       from: move.from,
       to: move.to,
