@@ -128,7 +128,7 @@
     <!-- Header -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Position Evaluator</h1>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Analysis Board</h1>
         <a
           href="/"
           class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
