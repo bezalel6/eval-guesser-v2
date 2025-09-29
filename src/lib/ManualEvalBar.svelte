@@ -134,11 +134,17 @@
     }
   }
 
-  // Handle slider input
-  function handleSliderInput(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    currentGuess = parseFloat(target.value);
-    isMateGuess = false;
+  // Handle increment/decrement buttons
+  function incrementEval(): void {
+    if (!isMateGuess) {
+      currentGuess = Math.min(20, currentGuess + 0.25);
+    }
+  }
+
+  function decrementEval(): void {
+    if (!isMateGuess) {
+      currentGuess = Math.max(-20, currentGuess - 0.25);
+    }
   }
 
   // Submit evaluation
@@ -215,21 +221,28 @@
 
   <!-- Control panel - separate from the bar -->
   <div class="control-panel" class:hidden={!showControls}>
-    <!-- Fine-tuning slider -->
+    <!-- Fine adjustment buttons -->
     <div class="control-group">
-      <label class="control-label">
-        Fine Adjust
-        <input
-          type="range"
-          min="-20"
-          max="20"
-          step="0.01"
-          value={currentGuess}
-          on:input={handleSliderInput}
-          disabled={isMateGuess}
-          class="fine-slider"
-        />
-      </label>
+      <label class="control-label">Fine Adjust</label>
+      <div class="adjust-buttons">
+        <button
+          on:click={decrementEval}
+          disabled={isMateGuess || currentGuess <= -20}
+          class="adjust-btn"
+          title="Decrease by 0.25"
+        >
+          −
+        </button>
+        <span class="adjust-value">0.25</span>
+        <button
+          on:click={incrementEval}
+          disabled={isMateGuess || currentGuess >= 20}
+          class="adjust-btn"
+          title="Increase by 0.25"
+        >
+          +
+        </button>
+      </div>
     </div>
 
     <!-- Value display -->
@@ -464,29 +477,50 @@
     gap: 6px;
   }
 
-  .fine-slider {
-    width: 100%;
-    height: 4px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: linear-gradient(to right, #1f2937 0%, #9ca3af 50%, #f3f4f6 100%);
-    border-radius: 2px;
-    outline: none;
+  .adjust-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
   }
 
-  .fine-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    background: #3b82f6;
-    border-radius: 50%;
+  .adjust-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    font-size: 24px;
+    font-weight: bold;
     cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
-  .fine-slider:disabled {
-    opacity: 0.5;
+  .adjust-btn:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #3b82f6;
+    color: #3b82f6;
+  }
+
+  .adjust-btn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  .adjust-btn:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  .adjust-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 0 8px;
   }
 
   .value-display-large {
@@ -631,6 +665,22 @@
   :global(.dark) .value-display-large {
     background: #374151;
     color: #f3f4f6;
+  }
+
+  :global(.dark) .adjust-btn {
+    background: #374151;
+    color: #e5e7eb;
+    border-color: #4b5563;
+  }
+
+  :global(.dark) .adjust-btn:hover:not(:disabled) {
+    background: #4b5563;
+    border-color: #60a5fa;
+    color: #60a5fa;
+  }
+
+  :global(.dark) .adjust-value {
+    color: #9ca3af;
   }
 
   :global(.dark) .mate-in-input {
