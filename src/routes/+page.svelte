@@ -1,7 +1,7 @@
 <script lang="ts">
 </script>
 
-<div class="w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+<div class="w-full">
     <div class="max-w-6xl mx-auto px-6 py-12">
         <!-- Hero Section -->
         <div class="text-center mb-12">
