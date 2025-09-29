@@ -1,30 +1,33 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import type { FEN, AnalysisDepth, StockfishWorker, StockfishMessage, Color } from '$lib/types/chess';
 
-  export let fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Default starting position
-  export let depth = 15; // Analysis depth
+  // Props
+  export let fen: FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Default starting position
+  export let depth: AnalysisDepth = 15; // Analysis depth
 
-  let score = 0; // Evaluation score (positive = white advantage)
-  let displayScore = '0.00'; // Display string for the score
-  let isMate = false;
-  let mateIn = 0;
-  let worker;
+  // State variables
+  let score: number = 0; // Evaluation score (positive = white advantage)
+  let displayScore: string = '0.00'; // Display string for the score
+  let isMate: boolean = false;
+  let mateIn: number = 0;
+  let worker: StockfishWorker | undefined;
 
-  const MATE_SCORE = 1000; // Base score for mate evaluation
+  const MATE_SCORE: number = 1000; // Base score for mate evaluation
 
-  onMount(() => {
-    worker = new Worker('/stockfish.js');
+  onMount((): void => {
+    worker = new Worker('/stockfish.js') as StockfishWorker;
     worker.onmessage = handleMessage;
     analyzePosition();
   });
 
-  onDestroy(() => {
+  onDestroy((): void => {
     if (worker) worker.terminate();
   });
 
   $: if (fen) analyzePosition(); // React to FEN changes
 
-  function analyzePosition() {
+  function analyzePosition(): void {
     if (!worker) return;
     worker.postMessage('uci');
     worker.postMessage('isready');
@@ -32,18 +35,18 @@
     worker.postMessage(`go depth ${depth}`);
   }
 
-  function handleMessage(event) {
-    const message = event.data;
+  function handleMessage(event: MessageEvent<StockfishMessage>): void {
+    const message: StockfishMessage = event.data;
     console.log(message)
     if (typeof message === 'string') {
       // Stockfish reports score from the perspective of the side to move
       // We need to convert to always show from white's perspective
-      const isBlackToMove = fen.split(' ')[1] === 'b';
+      const isBlackToMove: boolean = fen.split(' ')[1] === 'b';
 
       // Check for mate score first
-      const mateMatch = message.match(/score mate (-?\d+)/);
+      const mateMatch: RegExpMatchArray | null = message.match(/score mate (-?\d+)/);
       if (mateMatch) {
-        mateIn = parseInt(mateMatch[1]);
+        mateIn = parseInt(mateMatch[1], 10);
         isMate = true;
 
         // Special handling for mate 0 (checkmate on board)
@@ -78,11 +81,11 @@
         }
       } else {
         // Check for centipawn score
-        const cpMatch = message.match(/score cp (-?\d+)/);
+        const cpMatch: RegExpMatchArray | null = message.match(/score cp (-?\d+)/);
         if (cpMatch) {
           isMate = false;
           mateIn = 0;
-          let rawScore = parseInt(cpMatch[1]) / 100; // Convert to pawns
+          let rawScore: number = parseInt(cpMatch[1], 10) / 100; // Convert to pawns
 
           // Convert to white's perspective if black to move
           if (isBlackToMove) {
@@ -105,14 +108,14 @@
   // Calculate bar fill (50% neutral, shifts based on score)
   // For normal evaluations: map score to 5-95% range to leave room for mates
   // For ANY mate: complete fill (100% or 0%) - forced win is absolute
-  $: whiteFill = (() => {
+  $: whiteFill = ((): number => {
     if (isMate) {
       // ANY checkmate (M0, M1, M2, etc.) is a forced win - complete fill
       return score > 0 ? 100 : 0;
     }
     // For normal scores, map to range that leaves room at extremes
     // Clamp score between -20 and +20, then map to 5%-95%
-    const clampedScore = Math.max(-20, Math.min(20, score));
+    const clampedScore: number = Math.max(-20, Math.min(20, score));
     // Map -20 to 5%, 0 to 50%, +20 to 95%
     return 50 + (clampedScore * 2.25); // 2.25 = 45/20
   })();

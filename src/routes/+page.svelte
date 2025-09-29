@@ -1,15 +1,15 @@
-<script>
+<script lang="ts">
   import 'chessground/assets/chessground.base.css';
   import 'chessground/assets/chessground.cburnett.css';
   import { Chess } from 'svelte-chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
+  import type { FEN } from '$lib/types/chess';
 
-  let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  let currentFen: FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 </script>
 
 <div class="w-full">
     <div class="max-w-6xl mx-auto px-6 py-12">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">Eval Guesser</h1>
 
         <div class="chess-container">
             <EvaluationBar fen={currentFen} depth={15} />
