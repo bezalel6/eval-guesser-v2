@@ -6,9 +6,6 @@
         <!-- Hero Section -->
         <div class="text-center mb-12">
             <h1 class="text-5xl font-bold text-gray-900 dark:text-white mb-6">Eval Guesser</h1>
-            <p class="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-                Master chess evaluation with real-time Stockfish analysis. Test your positional understanding and improve your chess skills.
-            </p>
         </div>
 
         <!-- Main Actions -->
@@ -21,18 +18,12 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Play vs Computer</h2>
-                    <p class="text-gray-600 dark:text-gray-400 mb-6">
-                        Challenge Stockfish at various skill levels from beginner to master
-                    </p>
+                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Play vs Computer</h2>
                     <a
                         href="/play"
                         class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                     >
-                        Play Now
-                        <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+                        Play
                     </a>
                 </div>
             </div>
@@ -45,18 +36,12 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                     </div>
-                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Analysis Board</h2>
-                    <p class="text-gray-600 dark:text-gray-400 mb-6">
-                        Analyze any position with deep Stockfish evaluation
-                    </p>
+                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Analysis Board</h2>
                     <a
                         href="/analysis"
                         class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                     >
-                        Open Analysis
-                        <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+                        Analyze
                     </a>
                 </div>
             </div>
@@ -69,71 +54,17 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Play Eval Guesser</h2>
-                    <p class="text-gray-600 dark:text-gray-400 mb-6">
-                        Test your evaluation skills by guessing the computer's assessment
-                    </p>
+                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Evaluation Game</h2>
                     <button
                         disabled
                         class="inline-flex items-center px-6 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium opacity-75"
                     >
-                        Coming Soon
+                        Not Implemented
                         <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                     </button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Example Positions -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                Try These Example Positions
-            </h3>
-            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <a
-                    href="/analysis?fen=r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">Italian Game</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Classic opening position</p>
-                </a>
-                <a
-                    href="/analysis?fen=r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">Four Knights</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Symmetrical development</p>
-                </a>
-                <a
-                    href="/analysis?fen=rnbqkb1r/pp2pppp/3p1n2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 1 4"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">Pirc Defense</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Hypermodern opening</p>
-                </a>
-                <a
-                    href="/analysis?fen=r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 4"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">Scotch Game</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Open center position</p>
-                </a>
-                <a
-                    href="/analysis?fen=rnbqk2r/pppp1ppp/4pn2/2b5/2PP4/5N2/PP2PPPP/RNBQKB1R w KQkq - 4 4"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">Queen's Gambit</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Classical chess opening</p>
-                </a>
-                <a
-                    href="/analysis?fen=6k1/5p2/6p1/8/7P/8/5PP1/6K1 b - - 0 1"
-                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                    <p class="font-medium text-gray-900 dark:text-white mb-1">King & Pawn Endgame</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Test endgame knowledge</p>
-                </a>
             </div>
         </div>
     </div>

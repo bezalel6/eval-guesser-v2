@@ -21,27 +21,54 @@
   let moveCount: number = 0; // Track total moves for key
   let gameStarted: boolean = false; // Track if game has started
   let showSettingsModal: boolean = true; // Show settings before game
+  let chessComponent: any; // Reference to the Chess component
 
   // Settings
   let playerColor: 'white' | 'black' = data.playerColor;
   let computerLevel: number = data.computerLevel;
 
   // Start a new game with selected settings
-  function startGame(): void {
+  async function startGame(): Promise<void> {
     if (!browser) return;
 
+    // Reset the board position
+    currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+    // Reset move history
+    moveHistory = [];
+    moveCount = 0;
+
+    // Wait for DOM update
+    await tick();
+
+    // Reset the Chess component if it exists
+    if (chessComponent) {
+      chessComponent.reset();
+    }
+
     // Initialize game manager
-    gameManager = new GameManager(data.fen, playerColor, computerLevel);
+    gameManager = new GameManager(currentFen, playerColor, computerLevel);
 
     // Set up callbacks
     gameManager.onMove(async (move) => {
-      const newFen = move.fen || gameManager.getFen();
-      console.log('Move made, updating FEN from:', currentFen, 'to:', newFen);
+      console.log('Move made:', move);
 
-      // Force update by reassigning (triggers Svelte reactivity)
-      currentFen = newFen;
+      // Use the Chess component's move method if it's a computer move
+      if (chessComponent && move.from && move.to) {
+        // Make the move using the Chess component's API
+        chessComponent.move({
+          from: move.from,
+          to: move.to,
+          promotion: move.promotion
+        });
+      }
+
+      // Update move history
       moveHistory = [...moveHistory, move];
       moveCount++; // Increment to force re-render
+
+      // Update FEN for evaluation bar
+      currentFen = gameManager.getFen();
 
       // Ensure DOM updates
       await tick();
@@ -73,8 +100,7 @@
     const move = event.detail;
     console.log('Player move event:', move);
 
-    // The Chess component has already updated currentFen through binding
-    // We just need to tell the game manager about the move
+    // Tell the game manager about the move
     const success = gameManager.makePlayerMove({
       from: move.from,
       to: move.to,
@@ -82,6 +108,9 @@
     });
 
     if (success) {
+      // Update the FEN for the evaluation bar
+      currentFen = gameManager.getFen();
+
       isThinking = true;
       setTimeout(() => {
         isThinking = gameManager.isComputerThinking();
@@ -93,7 +122,7 @@
   function newGame(): void {
     // Destroy current game
     gameManager?.destroy();
-    gameManager = null;
+    gameManager = null!;
 
     // Reset state
     moveHistory = [];
@@ -107,9 +136,15 @@
 
   // Undo move
   function undoMove(): void {
-    if (gameManager && !isThinking) {
+    if (gameManager && !isThinking && chessComponent) {
+      // Undo two moves (player's and computer's)
+      chessComponent.undo();
+      chessComponent.undo();
+
+      // Update game manager's internal state
       gameManager.undo();
       currentFen = gameManager.getFen();
+
       // Remove last two moves from history (player and computer)
       moveHistory = moveHistory.slice(0, -2);
     }
@@ -149,12 +184,11 @@
             />
           {/if}
           <div class="board-wrapper-play">
-            {#key moveCount}
-              <Chess
-                fen={currentFen}
-                on:move={handleMove}
-              />
-            {/key}
+            <Chess
+              bind:this={chessComponent}
+              fen={currentFen}
+              on:move={handleMove}
+            />
           </div>
         </div>
 
@@ -208,14 +242,14 @@
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-          Game Settings
+          Settings
         </h2>
 
         <div class="space-y-6">
           <!-- Player Color -->
           <div>
-            <label for="modal-player-color" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Play as
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Color
             </label>
             <div class="grid grid-cols-2 gap-4">
               <button
@@ -238,7 +272,7 @@
           <!-- Computer Level -->
           <div>
             <label for="modal-level" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Computer Strength: {computerLevel}
+              Max Search Depth: {computerLevel}
             </label>
             <input
               id="modal-level"
@@ -248,11 +282,6 @@
               bind:value={computerLevel}
               class="w-full"
             />
-            <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-              <span>Beginner</span>
-              <span>Intermediate</span>
-              <span>Master</span>
-            </div>
           </div>
 
           <!-- Show Evaluation -->
@@ -264,7 +293,7 @@
                 class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">
-                Show evaluation bar during game
+                Show evaluation
               </span>
             </label>
           </div>
