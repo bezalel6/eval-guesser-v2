@@ -114,11 +114,11 @@
           blackFill: result.value > 0 ? 0 : 100
         };
       } else {
-        const whiteFillCalc = calculateWhiteFill(result.value, false, true);
+        const whiteFillCalc = calculateWhiteFill(result.value, false, false);
         dragState = {
           currentGuess: result.value,
           isMateGuess: false,
-          isWhiteMate: true,
+          isWhiteMate: false,
           displayValue: result.displayStr,
           whiteFill: whiteFillCalc,
           blackFill: 100 - whiteFillCalc
