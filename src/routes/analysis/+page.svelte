@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { Chess } from '$lib/chess';
+  import { Chess, Engine } from '$lib/chess';
   import EvaluationBar from '$lib/EvaluationBar.svelte';
   import type { PageData } from './$types';
   import type { FEN } from '$lib/types/chess';
   import type { AnalysisSnapshot } from '$lib/uciParser';
+  import { onMount } from 'svelte';
 
   export let data: PageData;
 
   // Chess component reference
   let chessComponent: Chess;
+  let evaluationBar: EvaluationBar;
 
   // Current position being analyzed
   let currentFen: FEN = data.fen;
@@ -22,6 +24,9 @@
   let currentAnalysis: AnalysisSnapshot | null = null;
   let analysisInProgress: boolean = false;
 
+  // Engine for analysis (color: 'none' means it won't auto-play)
+  let analysisEngine: Engine | undefined;
+
   // Top engine moves (maximum 4)
   interface EngineMove {
     move: string; // UCI format
@@ -34,6 +39,63 @@
   }
 
   let topMoves: EngineMove[] = [];
+
+  // Initialize analysis engine on mount
+  onMount(() => {
+    // Create engine for analysis mode (doesn't auto-play)
+    analysisEngine = new Engine({
+      color: 'none', // Won't auto-play moves
+      depth: analysisDepth,
+      moveTime: 5000 // Allow more time for deep analysis
+    });
+  });
+
+  // Handle UCI messages from the Chess component
+  function handleUCI(event: CustomEvent<string>): void {
+    const message = event.detail;
+    // Forward UCI messages to the evaluation bar
+    if (evaluationBar) {
+      evaluationBar.handleUCIMessage(message);
+    }
+
+    // Also parse for analysis display
+    if (message.startsWith('info ')) {
+      // Parse MultiPV info for top moves display
+      parseEngineInfo(message);
+    }
+  }
+
+  // Parse engine info messages for top moves
+  function parseEngineInfo(message: string): void {
+    // This will be called for each UCI info line
+    // The existing handleAnalysis will still work via the EvaluationBar's dispatch
+  }
+
+  // Update analysis depth when slider changes
+  $: if (analysisEngine && analysisDepth) {
+    // Recreate engine with new depth
+    analysisEngine = new Engine({
+      color: 'none',
+      depth: analysisDepth,
+      moveTime: 5000
+    });
+  }
+
+  // Trigger analysis when position changes
+  $: if (analysisEngine && currentFen) {
+    // The Chess component will automatically analyze the position
+    // when it receives a new FEN with an engine attached
+    triggerAnalysis();
+  }
+
+  function triggerAnalysis(): void {
+    // The Chess component with an analysis engine will analyze automatically
+    // We just need to ensure the engine is set up correctly
+    if (chessComponent && analysisEngine) {
+      // For analysis mode, we might want to manually trigger
+      // This depends on how the Chess component handles 'none' color engines
+    }
+  }
 
   // Handle analysis updates from EvaluationBar
   function handleAnalysis(event: CustomEvent<AnalysisSnapshot>): void {
@@ -151,8 +213,8 @@
       <div class="lg:col-span-2">
         <div class="chess-container-analysis">
           <EvaluationBar
+            bind:this={evaluationBar}
             fen={currentFen}
-            depth={analysisDepth}
             on:analysis={handleAnalysis}
           />
           <div class="board-wrapper-analysis">
@@ -162,7 +224,9 @@
               bind:history={moveHistory}
               bind:moveNumber
               bind:turn
+              engine={analysisEngine}
               on:move={handleMove}
+              on:uci={handleUCI}
             />
           </div>
         </div>

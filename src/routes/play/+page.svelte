@@ -17,6 +17,7 @@
 
   // Chess component reference for methods
   let chessComponent: Chess;
+  let evaluationBar: EvaluationBar | undefined;
 
   // Settings
   let playerColor: 'white' | 'black' = data.playerColor;
@@ -62,6 +63,15 @@
   // Handle ready event
   function handleReady(): void {
     console.log('Chess component ready');
+  }
+
+  // Handle UCI messages from the Chess component
+  function handleUCI(event: CustomEvent<string>): void {
+    const message = event.detail;
+    // Forward UCI messages to the evaluation bar if it's shown
+    if (showEvaluation && evaluationBar) {
+      evaluationBar.handleUCIMessage(message);
+    }
   }
 
   // New game
@@ -116,8 +126,8 @@
         <div class="chess-container-play">
           {#if showEvaluation}
             <EvaluationBar
+              bind:this={evaluationBar}
               fen={currentFen}
-              depth={15}
             />
           {/if}
           <div class="board-wrapper-play">
@@ -134,6 +144,7 @@
               on:move={handleMove}
               on:gameOver={handleGameOver}
               on:ready={handleReady}
+              on:uci={handleUCI}
             />
           </div>
         </div>

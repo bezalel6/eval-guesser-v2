@@ -1,18 +1,15 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import type { FEN, AnalysisDepth, StockfishWorker, StockfishMessage } from '$lib/types/chess';
+  import type { FEN } from '$lib/types/chess';
   import { UCIParser } from '$lib/uciParser';
 
   // Props
   export let fen: FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Default starting position
-  export let depth: AnalysisDepth = 15; // Analysis depth
 
   // State variables
   let score: number = 0; // Evaluation score (positive = white advantage)
   let displayScore: string = '0.00'; // Display string for the score
   let isMate: boolean = false;
-  let worker: StockfishWorker | undefined;
 
   const dispatch = createEventDispatcher();
   const uciParser = new UCIParser();
@@ -22,37 +19,15 @@
     dispatch('analysis', snapshot);
   });
 
-  onMount((): void => {
-    worker = new Worker('/stockfish.js') as StockfishWorker;
-    worker.onmessage = handleMessage;
-    analyzePosition();
-  });
-
-  onDestroy((): void => {
-    if (worker) worker.terminate();
-  });
-
+  // Reactive statement to reset parser when FEN changes
   $: if (fen) {
-    // Clear previous analysis when position changes
     const isBlackToMove = fen.split(' ')[1] === 'b';
     uciParser.reset();
     uciParser.setSideToMove(isBlackToMove);
-    analyzePosition();
   }
 
-  function analyzePosition(): void {
-    if (!worker) return;
-    worker.postMessage('uci');
-    worker.postMessage('isready');
-    worker.postMessage(`position fen ${fen}`);
-    // Enable MultiPV for multiple best moves and set analysis depth
-    worker.postMessage('setoption name MultiPV value 4');
-    worker.postMessage(`go depth ${depth}`);
-  }
-
-  function handleMessage(event: MessageEvent<StockfishMessage>): void {
-    const message: StockfishMessage = event.data;
-
+  // Handle UCI messages from the Chess component
+  export function handleUCIMessage(message: string): void {
     if (typeof message === 'string') {
       // Parse UCI info messages for move analysis
       if (message.startsWith('info ')) {
